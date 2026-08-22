@@ -11,7 +11,7 @@ const envSchema = z.object({
   MCP_PROTOCOL_VERSION: z.string().min(1).default("2026-07-28"),
   ALLOWED_HOSTS: z.string().default("127.0.0.1,localhost"),
   ALLOWED_ORIGIN_HOSTS: z.string().default("127.0.0.1,localhost"),
-  TRUSTED_ORIGINS: z.string().default("http://127.0.0.1:3000,http://localhost:3000"),
+  TRUSTED_ORIGINS: z.string().default("http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:5173,http://localhost:5173"),
 });
 
 const parsed = envSchema.safeParse(process.env);

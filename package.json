@@ -1,26 +1,26 @@
 {
-  "name": "chisel-planner",
+  "name": "chisel",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "start": "bun src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "migrate:all": "bun src/db/migrate-all.ts",
-    "auth:bootstrap": "bun src/auth/bootstrap.ts"
-  },
-  "dependencies": {
-    "@better-auth/mcp": "^1.7.1",
-    "@modelcontextprotocol/hono": "latest",
-    "@modelcontextprotocol/server": "latest",
-    "better-auth": "^1.7.1",
-    "hono": "latest",
-    "zod": "latest"
+    "dev": "concurrently -k \"bun run dev:api\" \"bun run dev:web\"",
+    "dev:api": "bun --watch apps/api/src/index.ts",
+    "dev:web": "bun run --cwd apps/web dev",
+    "start": "bun apps/api/src/index.ts",
+    "build": "bun run build:api && bun run build:web",
+    "build:api": "bun build apps/api/src/index.ts --outdir apps/api/dist --target bun",
+    "build:web": "bun run --cwd apps/web build",
+    "typecheck": "tsc -p apps/api/tsconfig.json && bun run --cwd apps/web typecheck",
+    "test": "bun test apps/api/tests",
+    "migrate:all": "bun apps/api/src/db/migrate-all.ts",
+    "auth:bootstrap": "bun apps/api/src/auth/bootstrap.ts"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "@types/bun": "latest",
     "typescript": "latest"
   }

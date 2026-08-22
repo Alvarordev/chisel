@@ -1,0 +1,28 @@
+{
+  "name": "@chisel/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "migrate:all": "bun src/db/migrate-all.ts",
+    "auth:bootstrap": "bun src/auth/bootstrap.ts"
+  },
+  "dependencies": {
+    "@better-auth/mcp": "^1.7.1",
+    "@modelcontextprotocol/hono": "latest",
+    "@modelcontextprotocol/server": "latest",
+    "better-auth": "^1.7.1",
+    "hono": "latest",
+    "jose": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
+}

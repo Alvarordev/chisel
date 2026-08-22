@@ -29,53 +29,38 @@
 ## 2. Estructura del proyecto
 
 ```
-src/
-    core/                          ← toda la lógica de negocio
-    projects/
-    documents/
-      ingest.ts                  ← pdf/docx → markdown
-    capacity/
-      resolve.ts                 ← plantilla + excepciones + inferencia
-    tasks/
-    habits/
-    planning/
-      propose.ts
-      warnings.ts
-      close-day.ts
-    events/
-    notes/
-    shared.ts                      ← tipos y reglas comunes del dominio
-
-  db/
-    system.ts                    ← conexión a system.db
-    user.ts                      ← pool de conexiones por usuario
-    pragmas.ts
-    migrations/
-      system/
-      user/
-    migrator.ts
-
-  api/                           ← cáscara REST (web)
-    routes/
-    middleware/auth.ts
-
-  mcp/                           ← cáscara MCP (agentes)
-    server.ts
-    tools/
-    resources/
-    prompts/
-    contract.ts                  ← texto del contrato del planificador
-
-  auth/
-    oauth/                       ← spike e integración del authorization server MCP
-    jwt.ts                       ← solo si el spike lo justifica; no criptografía propia
-
-  index.ts                       ← bootstrap Hono
+apps/
+  api/
+    src/
+      core/                        ← toda la lógica de negocio
+      projects/
+      documents/
+        ingest.ts                  ← pdf/docx → markdown
+      capacity/
+        resolve.ts                 ← plantilla + excepciones + inferencia
+      tasks/
+      habits/
+      planning/
+        propose.ts
+        warnings.ts
+        close-day.ts
+      events/
+      notes/
+      shared.ts                    ← tipos y reglas comunes del dominio
+      db/                           ← system.db, usuarios y migraciones
+      api/                          ← cáscara REST
+      mcp/                          ← cáscara MCP
+      auth/                         ← Better Auth, actores y bootstrap
+      index.ts                      ← bootstrap Hono
+    tests/
+  web/                             ← React/Vite/Tailwind responsive
+packages/
+  contracts/                       ← schemas y tipos HTTP compartidos
 ```
 
 **Regla arquitectónica:** ni una decisión de negocio en `api/` ni en `mcp/`. Ambas traducen entrada, llaman a un service de `core/` y traducen salida. Un `ActorContext` (`{ userId, source, agentClient }`) se construye en el middleware y se pasa a los services; nunca se deduce dentro de `core/`.
 
-Durante la Fase 1 existe únicamente un `DEV_USER_ID` configurable para probar el dominio y MCP sin auth. Ese usuario local se crea bajo demanda y no es un seed de producción; debe desaparecer al activar los guards web/OAuth.
+El frontend web vive en `apps/web` y consume la API con sesiones Better Auth. `DEV_USER_ID` ya no participa en las rutas REST ni MCP; los actores se resuelven desde la sesión web o el bearer token OAuth.
 
 ---
 
@@ -497,7 +482,7 @@ Primitiva del protocolo, soportada por los tres clientes. No slash commands.
 
 ### 7.5 El contrato
 
-Vive en `src/mcp/contract.ts` como constante exportada, inyectada en:
+Vive en `apps/api/src/mcp/contract.ts` como constante exportada, inyectada en:
 
 - la `description` de `propose_tasks` y `create_tasks`
 - el resource `planning-contract`
@@ -511,8 +496,9 @@ Es **la pieza de mayor riesgo del proyecto** y la única que se itera sin desple
 Prefijo `/api`. Autenticación JWT.
 
 ```
-POST   /api/auth/login
-POST   /api/auth/register
+POST   /api/auth/sign-in/email
+POST   /api/auth/sign-out
+GET    /api/auth/get-session
 
 GET    /api/day/:date
 POST   /api/tasks/:id/complete
@@ -539,14 +525,14 @@ POST   /api/habits
 
 ## 9. Autenticación
 
-**Web:** sesión larga mediante cookie `HttpOnly`, `Secure` y `SameSite=Lax`; el middleware puede aceptar `Authorization` para clientes de API. La decisión final de librería se toma junto con el spike OAuth.
+**Web:** Better Auth con sesión larga mediante cookie `HttpOnly`, `Secure` y `SameSite=Lax`. El frontend React vive en `apps/web` y la API resuelve el `ActorContext` desde la sesión.
 
 **MCP:** OAuth 2.1 con PKCE. El servidor debe usar una librería probada para authorization server y validación de tokens; no se implementan criptografía, JWT ni validación de firmas manualmente.
 
 Flujo mínimo requerido por los clientes:
 
 1. Discovery vía `/.well-known/*`
-2. Preferir Client ID Metadata Documents; soportar registro dinámico (`/oauth/register`) solo como fallback de compatibilidad.
+2. CIMD queda preparado como evolución; el registro dinámico `/api/auth/oauth2/register` está activo como compatibilidad inicial.
 3. `/oauth/authorize` con PKCE y `resource` → pantalla de login → redirect con code e issuer cuando corresponda
 4. `/oauth/token` → access + refresh
 5. Bearer token en cada POST a `/mcp`, validando expiración, scopes, issuer y audiencia/resource canónico
@@ -575,7 +561,7 @@ Las fases son secuenciales por dependencia técnica, no por calendario.
 
 **Fase 3 — MCP**
 
-9. Servidor MCP `2026-07-28` con `server/discover` y tools de lectura sin auth. Verificar con MCP Inspector antes de ampliar la superficie.
+9. Servidor MCP `2026-07-28` con `server/discover` y tools protegidos por OAuth 2.1. Verificar discovery, PKCE y bearer antes de ampliar la superficie.
 10. Tools de escritura con schemas Zod, `outputSchema`/structured content donde corresponda y annotations.
 11. Resources y prompts.
 12. Contrato del planificador.

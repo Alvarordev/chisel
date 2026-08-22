@@ -1,6 +1,7 @@
 import { createMcpHonoApp } from "@modelcontextprotocol/hono";
 import { requireMcpAuth } from "@better-auth/mcp";
 import { cors } from "hono/cors";
+import { serveStatic } from "hono/bun";
 import type { Context } from "hono";
 import { logger } from "hono/logger";
 import { config, trustedOrigins } from "./config.ts";
@@ -9,6 +10,9 @@ import { auth, ensureAuthSchema } from "./auth/index.ts";
 import { authInfoFromClaims } from "./auth/actors.ts";
 import { authUiRoutes } from "./auth/ui.ts";
 import { plannerMcpHandler } from "./mcp/server.ts";
+
+const webDistPath = new URL("../../web/dist/", import.meta.url).pathname;
+const webIndexUrl = new URL("../../web/dist/index.html", import.meta.url);
 
 const mcpAuthHandler = requireMcpAuth(
   auth,
@@ -37,6 +41,12 @@ async function rootAuthServerMetadataHandler(c: Context) {
   return auth.handler(request);
 }
 
+async function webAppHandler(c: Context) {
+  const file = Bun.file(webIndexUrl);
+  if (!(await file.exists())) return c.json({ error: "Web build not found" }, 404);
+  return c.body(await file.arrayBuffer(), 200, { "content-type": "text/html; charset=UTF-8" });
+}
+
 export function createApp() {
   const app = createMcpHonoApp({
     host: config.HOST,
@@ -61,6 +71,10 @@ export function createApp() {
     await ensureAuthSchema();
     return mcpAuthHandler(c.req.raw);
   });
+  app.get("/", (c) => c.redirect("/app/today"));
+  app.get("/app", webAppHandler);
+  app.get("/app/*", webAppHandler);
+  app.use("/assets/*", serveStatic({ root: webDistPath }));
 
   app.notFound((c) => c.json({ error: "Not found" }, 404));
   app.onError((error, c) => {

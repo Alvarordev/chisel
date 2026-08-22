@@ -4,7 +4,7 @@ Planificador personal con una interfaz principal de agentes mediante MCP.
 
 ## Estado
 
-El primer corte implementa el andamio Bun/Hono, SQLite por usuario, migraciones, configuración, dominio de proyectos/tareas/hábitos/capacidad, REST y un servidor MCP autenticado. OAuth 2.1 se resuelve con Better Auth: PKCE, DCR, login cerrado, sesiones web, JWT y tokens ligados al recurso MCP. La UI web completa y CIMD quedan para fases posteriores.
+El primer corte implementa el andamio Bun/Hono, SQLite por usuario, migraciones, configuración, dominio de proyectos/tareas/hábitos/capacidad, REST, una aproximación web responsive y un servidor MCP autenticado. OAuth 2.1 se resuelve con Better Auth: PKCE, DCR, login cerrado, sesiones web, JWT y tokens ligados al recurso MCP. La UI seguirá evolucionando desde Figma y CIMD queda para una fase posterior.
 
 ## Requisitos
 
@@ -19,6 +19,8 @@ cp .env.example .env
 bun run dev
 ```
 
+`bun run dev` levanta la API en `127.0.0.1:3000` y Vite en `127.0.0.1:5173`. La aplicación web vive en `/app/today` durante producción y usa un proxy a la API durante desarrollo.
+
 Crear el primer usuario con el registro cerrado:
 
 ```bash
@@ -26,6 +28,8 @@ AUTH_BOOTSTRAP_EMAIL=owner@example.com \
 AUTH_BOOTSTRAP_PASSWORD='una-password-de-12-caracteres' \
 bun run auth:bootstrap
 ```
+
+La primera aproximación web permite iniciar sesión, revisar el día, completar tareas y hábitos, crear proyectos y copiar la URL de conexión MCP. La vista está pensada mobile-first y se adapta a escritorio con sidebar.
 
 Verificación rápida:
 

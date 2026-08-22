@@ -361,7 +361,7 @@ El servidor expone un endpoint `/mcp` sobre **Streamable HTTP** con HTTPS y OAut
 
 Requisito crítico: los metadatos de discovery en `/.well-known/oauth-authorization-server` y `/.well-known/oauth-protected-resource` deben responder correctamente, o los clientes no llegan siquiera a la pantalla de login. Cada request debe incluir `MCP-Protocol-Version`, `Mcp-Method` y, para tools/resources/prompts, `Mcp-Name`.
 
-La implementación inicial se valida sin auth. OAuth se incorpora después del spike de una librería probada. Para MCP `2026-07-28`, Client ID Metadata Documents es el mecanismo preferido; Dynamic Client Registration queda como fallback de compatibilidad. Los tokens deben estar ligados al `resource` canónico `/mcp`, tener expiración y validarse contra audiencia y scopes.
+La implementación actual usa Better Auth para OAuth 2.1 con PKCE, JWT, DCR y login cerrado. Para MCP `2026-07-28`, Client ID Metadata Documents queda como evolución preferida; Dynamic Client Registration es el mecanismo activo de compatibilidad. Los tokens están ligados al `resource` canónico `/mcp`, tienen expiración y se validan contra audiencia y scopes.
 
 | Cliente | Configuración |
 |---|---|
@@ -399,7 +399,7 @@ Si falla el 1, hay fricción en la planificación. Si falla el 2, el planificado
 - Tools de planificación y de configuración (§8.1).
 - Prompts `plan_today` y `close_day`.
 - Resource `planning-contract`.
-- Streamable HTTP `2026-07-28` primero, sin auth, verificado con MCP Inspector y Claude Code. OAuth 2.1 después del spike de librería.
+- Streamable HTTP `2026-07-28` con OAuth 2.1, verificado contra Better Auth y el flujo PKCE. La superficie web responsive inicial vive en el mismo servicio.
 
 **Domingo — Web mínima, despliegue y onboarding**
 
