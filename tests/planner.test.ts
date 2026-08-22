@@ -93,7 +93,7 @@ test("capacity is expressed in minutes and preserves the completed habit mode", 
   resetUserDbPoolForTests();
 });
 
-test("serves a modern stateless MCP discovery request", async () => {
+test("challenges unauthenticated modern MCP requests", async () => {
   const { app } = await import("../src/index.ts");
   const body = {
     jsonrpc: "2.0",
@@ -118,8 +118,9 @@ test("serves a modern stateless MCP discovery request", async () => {
     },
     body: JSON.stringify(body),
   });
-  const result = (await response.json()) as { result?: { supportedVersions?: string[] } };
+  const result = (await response.json()) as { error?: { message?: string } };
 
-  expect(response.status).toBe(200);
-  expect(result.result?.supportedVersions).toContain("2026-07-28");
+  expect(response.status).toBe(401);
+  expect(response.headers.get("www-authenticate")).toContain("resource_metadata");
+  expect(result.error?.message).toContain("authorization");
 });

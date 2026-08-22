@@ -9,11 +9,14 @@
     "build": "bun build src/index.ts --outdir dist --target bun",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "migrate:all": "bun src/db/migrate-all.ts"
+    "migrate:all": "bun src/db/migrate-all.ts",
+    "auth:bootstrap": "bun src/auth/bootstrap.ts"
   },
   "dependencies": {
+    "@better-auth/mcp": "^1.7.1",
     "@modelcontextprotocol/hono": "latest",
     "@modelcontextprotocol/server": "latest",
+    "better-auth": "^1.7.1",
     "hono": "latest",
     "zod": "latest"
   },

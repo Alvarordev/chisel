@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Database, SQLQueryBindings } from "bun:sqlite";
 
@@ -15,18 +15,16 @@ type Migration = {
   sql: string;
 };
 
-async function loadMigrations(directory: string): Promise<Migration[]> {
+function loadMigrations(directory: string): Migration[] {
   const names = readdirSync(directory)
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
 
-  return Promise.all(
-    names.map(async (name) => ({
-      version: Number(name.split("_", 1)[0]),
-      name,
-      sql: await Bun.file(join(directory, name)).text(),
-    })),
-  );
+  return names.map((name) => ({
+    version: Number(name.split("_", 1)[0]),
+    name,
+    sql: readFileSync(join(directory, name), "utf8"),
+  }));
 }
 
 function currentUserVersion(db: Database): number {
@@ -38,14 +36,14 @@ function setUserVersion(db: Database, version: number): void {
   db.exec(`PRAGMA user_version = ${version}`);
 }
 
-export async function applyMigrations(options: {
+export function applyMigrations(options: {
   db: Database;
   directory: string;
   kind: MigrationKind;
   identifier: string;
   registry: MigrationRegistry;
-}): Promise<number> {
-  const migrations = await loadMigrations(options.directory);
+}): number {
+  const migrations = loadMigrations(options.directory);
   let version = currentUserVersion(options.db);
 
   for (const migration of migrations) {

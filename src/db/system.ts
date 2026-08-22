@@ -23,10 +23,14 @@ function dataDirectory(): string {
 }
 
 export async function getSystemDb(): Promise<Database> {
+  return openSystemDb();
+}
+
+export function openSystemDb(): Database {
   if (!systemDb) {
     systemDb = new Database(join(dataDirectory(), "system.db"));
     applyPragmas(systemDb);
-    await applyMigrations({
+    applyMigrations({
       db: systemDb,
       directory: migrationDirectory("system"),
       kind: "system",
@@ -54,7 +58,7 @@ export async function ensureUser(input: {
     `
       INSERT INTO users (id, email, password_hash, timezone, day_start, day_end, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT (id) DO NOTHING
+      ON CONFLICT (id) DO UPDATE SET email = excluded.email
     `,
   ).run(
     input.id,

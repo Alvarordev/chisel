@@ -1,9 +1,9 @@
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { config } from "../config.ts";
 import { getUserProfile, ensureUser } from "../db/system.ts";
 import { getUserDb } from "../db/user.ts";
-import type { ActorContext, AgentClient } from "../core/context.ts";
+import type { ActorContext } from "../core/context.ts";
+import { actorFromMcpAuth } from "../auth/actors.ts";
 import {
   blockAttributeSchema,
   createException,
@@ -39,22 +39,6 @@ const taskPlanSchema = z.object({
   date: dateSchema,
   tasks: z.array(taskDraftSchema).min(1),
 });
-
-function agentClientFromRequest(request: Request | undefined): AgentClient {
-  const userAgent = request?.headers.get("user-agent")?.toLowerCase() ?? "";
-  if (userAgent.includes("claude")) return "claude";
-  if (userAgent.includes("chatgpt")) return "chatgpt";
-  if (userAgent.includes("gemini")) return "gemini";
-  return null;
-}
-
-function actorFromRequest(request: Request | undefined): ActorContext {
-  return {
-    userId: config.DEV_USER_ID,
-    source: "agent",
-    agentClient: agentClientFromRequest(request),
-  };
-}
 
 function jsonResult(data: unknown) {
   return {
@@ -329,9 +313,13 @@ function createPlannerServer(actor: ActorContext, db: Awaited<ReturnType<typeof 
   return server;
 }
 
-export const mcpHandler = createMcpHandler(
-  async (ctx) => {
-    const actor = actorFromRequest(ctx.requestInfo);
+export const plannerMcpHandler = createMcpHandler(
+  async ({ authInfo, requestInfo }) => {
+    if (!authInfo || !requestInfo) {
+      throw new Error("MCP request is missing verified authentication");
+    }
+
+    const actor = await actorFromMcpAuth(authInfo, requestInfo);
     await ensureUser({ id: actor.userId });
     const db = await getUserDb(actor.userId);
     return createPlannerServer(actor, db);
