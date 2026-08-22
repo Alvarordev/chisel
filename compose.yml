@@ -1,0 +1,14 @@
+services:
+  planner:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - planner-data:/data
+    environment:
+      DATA_DIR: /data
+      HOST: 0.0.0.0
+      PORT: 3000
+
+volumes:
+  planner-data:
