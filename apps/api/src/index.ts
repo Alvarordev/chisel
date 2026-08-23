@@ -4,7 +4,7 @@ import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
 import type { Context } from "hono";
 import { logger } from "hono/logger";
-import { config, trustedOrigins } from "./config.ts";
+import { config, csv, trustedOrigins } from "./config.ts";
 import { apiRoutes } from "./api/routes.ts";
 import { auth, ensureAuthSchema } from "./auth/index.ts";
 import { authInfoFromClaims } from "./auth/actors.ts";
@@ -21,7 +21,7 @@ const mcpAuthHandler = requireMcpAuth(
   }),
   {
     resource: config.MCP_RESOURCE,
-    jwksUrl: `${config.AUTH_BASE_URL.replace(/\/$/, "")}/api/auth/jwks`,
+    jwksUrl: config.MCP_JWKS_URL,
     requiredScopes: ["mcp:tools"],
     challengeScopes: ["mcp:tools"],
   },
@@ -48,13 +48,21 @@ async function webAppHandler(c: Context) {
 }
 
 export function createApp() {
+  const allowedHosts = [
+    ...new Set([
+      ...csv(config.ALLOWED_HOSTS),
+      "127.0.0.1",
+      "localhost",
+    ]),
+  ];
   const app = createMcpHonoApp({
     host: config.HOST,
-    allowedHosts: config.ALLOWED_HOSTS.split(",").map((host) => host.trim()).filter(Boolean),
-    allowedOrigins: config.ALLOWED_ORIGIN_HOSTS.split(",").map((host) => host.trim()).filter(Boolean),
+    allowedHosts,
+    allowedOrigins: csv(config.ALLOWED_ORIGIN_HOSTS),
   });
 
   app.use("/api/*", logger());
+  app.use("/mcp", logger());
   app.use("/api/*", cors({ origin: trustedOrigins, credentials: true }));
   app.use("/.well-known/*", cors({ origin: trustedOrigins, credentials: true }));
 

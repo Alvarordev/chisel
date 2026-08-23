@@ -11,6 +11,7 @@ services:
       PORT: 3000
       AUTH_BASE_URL: ${AUTH_BASE_URL:-http://127.0.0.1:3000}
       MCP_RESOURCE: ${MCP_RESOURCE:-http://127.0.0.1:3000/mcp}
+      MCP_JWKS_URL: ${MCP_JWKS_URL:-http://127.0.0.1:3000/api/auth/jwks}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-this-in-production-with-32-random-characters}
       TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:5173,http://localhost:5173}
 

@@ -8,6 +8,7 @@ const envSchema = z.object({
   AUTH_BASE_URL: z.url().default("http://127.0.0.1:3000"),
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
   MCP_RESOURCE: z.url().default("http://127.0.0.1:3000/mcp"),
+  MCP_JWKS_URL: z.url().default("http://127.0.0.1:3000/api/auth/jwks"),
   MCP_PROTOCOL_VERSION: z.string().min(1).default("2026-07-28"),
   ALLOWED_HOSTS: z.string().default("127.0.0.1,localhost"),
   ALLOWED_ORIGIN_HOSTS: z.string().default("127.0.0.1,localhost"),
