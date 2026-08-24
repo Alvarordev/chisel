@@ -226,3 +226,11 @@ export async function updateProfile(input: { agentStyle?: AgentStyle }): Promise
     body: JSON.stringify(input),
   }));
 }
+
+export async function resetAccountData(): Promise<Profile> {
+  const data = await request<{ ok: boolean; profile: Profile }>("/api/account/reset", {
+    method: "POST",
+    body: JSON.stringify({ confirm: "BORRAR" }),
+  });
+  return profileSchema.parse(data.profile);
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AgentStyle, Profile } from "@chisel/contracts";
-import { ApiError, getProfile, signOut, updateProfile } from "../lib/api";
+import { ApiError, getProfile, resetAccountData, signOut, updateProfile } from "../lib/api";
 import { Icon } from "../components/Icon";
 import { useShellContext } from "../components/AppShell";
 
@@ -23,6 +23,10 @@ export function SettingsPage() {
   const [copied, setCopied] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [savingStyle, setSavingStyle] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState("");
   const mcpUrl = `${window.location.origin}/mcp`;
 
   useEffect(() => {
@@ -54,6 +58,37 @@ export function SettingsPage() {
       // keep previous value
     } finally {
       setSavingStyle(false);
+    }
+  }
+
+  function openResetDialog() {
+    setResetConfirm("");
+    setResetError("");
+    setResetOpen(true);
+  }
+
+  function closeResetDialog() {
+    if (resetting) return;
+    setResetOpen(false);
+    setResetConfirm("");
+    setResetError("");
+  }
+
+  async function handleReset() {
+    if (resetConfirm.trim().toUpperCase() !== "BORRAR") {
+      setResetError('Escribí BORRAR para confirmar.');
+      return;
+    }
+    setResetting(true);
+    setResetError("");
+    try {
+      setProfile(await resetAccountData());
+      setResetOpen(false);
+      setResetConfirm("");
+    } catch (caught) {
+      setResetError(caught instanceof ApiError ? caught.message : "No pudimos borrar los datos.");
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -126,7 +161,62 @@ export function SettingsPage() {
           </div>
           <div className="mcp-tip"><Icon name="sun" size={16} /><span>El agente puede leer tu contexto y proponer el siguiente día.</span></div>
         </section>
+
+        <section className="settings-card danger-card">
+          <p className="eyebrow danger-eyebrow">Zona peligrosa</p>
+          <h2>Borrar todos los datos</h2>
+          <p className="panel-lede">
+            Vuelve la app al estado inicial: proyectos, tareas, hábitos, horario y documentos.
+            Tu cuenta de acceso se mantiene.
+          </p>
+          <button className="danger-button" onClick={openResetDialog} type="button">
+            Borrar todo y volver al default
+          </button>
+        </section>
       </div>
+
+      {resetOpen && (
+        <div className="modal-backdrop" role="presentation" onClick={closeResetDialog}>
+          <div
+            aria-labelledby="reset-title"
+            aria-modal="true"
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <p className="eyebrow danger-eyebrow">Confirmación</p>
+            <h2 id="reset-title">¿Borrar todo?</h2>
+            <p>
+              Esta acción no se puede deshacer. Se eliminarán proyectos, tareas, hábitos, horario,
+              documentos y archivos subidos. Escribí <strong>BORRAR</strong> para continuar.
+            </p>
+            <label>
+              <span>Confirmación</span>
+              <input
+                autoFocus
+                disabled={resetting}
+                onChange={(event) => setResetConfirm(event.target.value)}
+                placeholder="BORRAR"
+                value={resetConfirm}
+              />
+            </label>
+            {resetError && <div className="inline-error" role="alert">{resetError}</div>}
+            <div className="modal-actions">
+              <button className="secondary-button" disabled={resetting} onClick={closeResetDialog} type="button">
+                Cancelar
+              </button>
+              <button
+                className="danger-button"
+                disabled={resetting || resetConfirm.trim().toUpperCase() !== "BORRAR"}
+                onClick={() => void handleReset()}
+                type="button"
+              >
+                {resetting ? "Borrando..." : "Borrar definitivamente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -164,6 +164,21 @@ test("stores agent style on user profile", async () => {
   expect(profile.agentStyle).toBe("direct");
 });
 
+test("resetUserData clears planner data and keeps the account", async () => {
+  const { resetUserData } = await import("../src/db/user.ts");
+  const { createProject, listProjects } = await import("../src/core/projects/service.ts");
+  const db = await getUserDb(actor.userId);
+  createProject(db, { name: "To wipe", kind: "build" });
+  expect(listProjects(db).length).toBeGreaterThan(0);
+
+  await resetUserData(actor.userId);
+  const fresh = await getUserDb(actor.userId);
+  expect(listProjects(fresh)).toHaveLength(0);
+  const profile = await getUserProfile(actor.userId);
+  expect(profile.agentStyle).toBe("direct");
+  expect(profile.timezone).toBe("UTC");
+});
+
 test("challenges unauthenticated modern MCP requests", async () => {
   const { app } = await import("../src/index.ts");
   const body = {

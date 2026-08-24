@@ -1,3 +1,4 @@
+import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { applyMigrations, databaseRegistry, migrationDirectory } from "./migrator.ts";
@@ -19,6 +20,13 @@ function evictIdleConnections(now: number): void {
       pool.delete(userId);
     }
   }
+}
+
+function closePooledUserDb(userId: string): void {
+  const existing = pool.get(userId);
+  if (!existing) return;
+  existing.db.close();
+  pool.delete(userId);
 }
 
 export async function getUserDb(userId: string): Promise<Database> {
@@ -49,6 +57,39 @@ export async function getUserDb(userId: string): Promise<Database> {
 
   pool.set(userId, { db, lastUsed: now });
   return db;
+}
+
+/** Wipe planner data for a user and recreate an empty user database. Keeps the auth account. */
+export async function resetUserData(userId: string): Promise<void> {
+  if (!/^[a-zA-Z0-9_-]+$/.test(userId)) {
+    throw new Error("Invalid user id");
+  }
+
+  closePooledUserDb(userId);
+
+  const root = dataDir();
+  const userDbPath = join(root, "users", `${userId}.db`);
+  for (const path of [userDbPath, `${userDbPath}-wal`, `${userDbPath}-shm`]) {
+    if (existsSync(path)) rmSync(path, { force: true });
+  }
+  for (const relative of [`originals/${userId}`, `previews/${userId}`]) {
+    const path = join(root, relative);
+    if (existsSync(path)) rmSync(path, { recursive: true, force: true });
+  }
+
+  const system = await getSystemDb();
+  system.query(`DELETE FROM schema_versions WHERE db_kind = 'user' AND identifier = ?`).run(userId);
+  system
+    .query(
+      `
+        UPDATE users
+        SET timezone = 'UTC', day_start = '07:00', day_end = '23:00', agent_style = 'direct'
+        WHERE id = ?
+      `,
+    )
+    .run(userId);
+
+  await getUserDb(userId);
 }
 
 export function closeUserDbs(): void {

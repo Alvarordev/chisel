@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { getUserProfile, ensureUser, updateUserProfile } from "../db/system.ts";
-import { getUserDb } from "../db/user.ts";
+import { getUserDb, resetUserData } from "../db/user.ts";
 import { getDay, completeTask } from "../core/tasks/service.ts";
 import {
   createProject,
@@ -233,4 +233,17 @@ apiRoutes.patch("/profile", async (c) => {
   const body = await c.req.json();
   const parsed = z.object({ agentStyle: z.enum(["direct", "conversational"]).optional() }).parse(body);
   return c.json(await updateUserProfile(actor.userId, parsed));
+});
+
+apiRoutes.post("/account/reset", async (c) => {
+  const actor = await actorFromSession(c.req.raw, "web");
+  if (!actor) return c.json({ error: "Unauthorized" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = z.object({ confirm: z.literal("BORRAR") }).safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: 'Debés confirmar con { "confirm": "BORRAR" }' }, 400);
+  }
+  await ensureUser({ id: actor.userId });
+  await resetUserData(actor.userId);
+  return c.json({ ok: true, profile: await getUserProfile(actor.userId) });
 });
