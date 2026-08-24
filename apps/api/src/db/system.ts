@@ -20,6 +20,7 @@ function dataDirectory(): string {
   mkdirSync(config.DATA_DIR, { recursive: true });
   mkdirSync(join(config.DATA_DIR, "users"), { recursive: true });
   mkdirSync(join(config.DATA_DIR, "originals"), { recursive: true });
+  mkdirSync(join(config.DATA_DIR, "previews"), { recursive: true });
   return config.DATA_DIR;
 }
 

@@ -71,7 +71,10 @@ function errorMessage(data: unknown, fallback: string): string {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (init.body && !isFormData && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
 
   const response = await fetch(path, {
     ...init,
@@ -142,11 +145,35 @@ export async function getProject(id: string): Promise<ProjectDetail> {
 
 export async function setProjectDocument(
   projectId: string,
-  input: { type: "spec" | "approach"; content: string; summary?: string | null },
+  input: {
+    type: "spec" | "approach";
+    content: string;
+    summary?: string | null;
+    previewId?: string;
+  },
 ): Promise<{ id: string; updatedAt: string }> {
   return request(`/api/projects/${encodeURIComponent(projectId)}/documents`, {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+export async function uploadProjectDocument(
+  projectId: string,
+  input: { type: "spec" | "approach"; file: File },
+): Promise<{
+  previewId: string;
+  type: "spec" | "approach";
+  markdown: string;
+  warnings: string[];
+  originalName: string;
+}> {
+  const body = new FormData();
+  body.set("type", input.type);
+  body.set("file", input.file);
+  return request(`/api/projects/${encodeURIComponent(projectId)}/documents/upload`, {
+    method: "POST",
+    body,
   });
 }
 

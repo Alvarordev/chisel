@@ -1,6 +1,13 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Project, ProjectDocument } from "@chisel/contracts";
-import { ApiError, createProject, getProject, getProjects, setProjectDocument } from "../lib/api";
+import {
+  ApiError,
+  createProject,
+  getProject,
+  getProjects,
+  setProjectDocument,
+  uploadProjectDocument,
+} from "../lib/api";
 import { Icon } from "../components/Icon";
 
 function projectProgress(project: Project): number {
@@ -23,14 +30,20 @@ export function ProjectsPage() {
   const [approach, setApproach] = useState("");
   const [specSummary, setSpecSummary] = useState("");
   const [approachSummary, setApproachSummary] = useState("");
+  const [specPreviewId, setSpecPreviewId] = useState<string | undefined>();
+  const [approachPreviewId, setApproachPreviewId] = useState<string | undefined>();
+  const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [savingDoc, setSavingDoc] = useState<"spec" | "approach" | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState<"spec" | "approach" | null>(null);
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"build" | "study">("build");
   const [deadline, setDeadline] = useState("");
   const [creating, setCreating] = useState(false);
+  const specFileRef = useRef<HTMLInputElement>(null);
+  const approachFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getProjects()
@@ -42,6 +55,9 @@ export function ProjectsPage() {
   useEffect(() => {
     if (!selectedId) return;
     setDetailLoading(true);
+    setSpecPreviewId(undefined);
+    setApproachPreviewId(undefined);
+    setUploadWarnings([]);
     getProject(selectedId)
       .then((detail) => {
         setSpec(documentContent(detail.documents, "spec"));
@@ -79,11 +95,37 @@ export function ProjectsPage() {
         type,
         content: type === "spec" ? spec : approach,
         summary: type === "spec" ? specSummary || null : approachSummary || null,
+        previewId: type === "spec" ? specPreviewId : approachPreviewId,
       });
+      if (type === "spec") setSpecPreviewId(undefined);
+      else setApproachPreviewId(undefined);
+      setUploadWarnings([]);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "No pudimos guardar el documento.");
     } finally {
       setSavingDoc(null);
+    }
+  }
+
+  async function handleUpload(type: "spec" | "approach", file: File | undefined) {
+    if (!selectedId || !file) return;
+    setUploadingDoc(type);
+    setError("");
+    setUploadWarnings([]);
+    try {
+      const preview = await uploadProjectDocument(selectedId, { type, file });
+      if (type === "spec") {
+        setSpec(preview.markdown);
+        setSpecPreviewId(preview.previewId);
+      } else {
+        setApproach(preview.markdown);
+        setApproachPreviewId(preview.previewId);
+      }
+      setUploadWarnings(preview.warnings);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "No pudimos procesar el archivo.");
+    } finally {
+      setUploadingDoc(null);
     }
   }
 
@@ -101,6 +143,11 @@ export function ProjectsPage() {
       </header>
 
       {error && <div className="inline-error" role="alert">{error}</div>}
+      {uploadWarnings.length > 0 && (
+        <div className="inline-warning" role="status">
+          {uploadWarnings.join(" · ")}
+        </div>
+      )}
 
       <div className="projects-layout">
         <section className="project-list-panel">
@@ -159,21 +206,42 @@ export function ProjectsPage() {
             <>
               <p className="eyebrow">Documentos</p>
               <h2>{selected.name}</h2>
-              <p className="panel-lede">Pegá el spec y el approach para que el agente planifique con contexto.</p>
+              <p className="panel-lede">Subí PDF/DOCX o pegá markdown. Revisá el preview antes de guardar.</p>
               {detailLoading ? (
                 <div className="loading-stack"><div className="skeleton" /><div className="skeleton" /></div>
               ) : (
                 <div className="document-forms">
                   <div className="document-form">
-                    <label>
+                    <div className="document-toolbar">
                       <span>Spec <em>Qué se pide</em></span>
-                      <textarea
-                        onChange={(event) => setSpec(event.target.value)}
-                        placeholder="Enunciado, requerimientos, PDF pegado..."
-                        rows={8}
-                        value={spec}
+                      <button
+                        className="secondary-button compact-button"
+                        disabled={uploadingDoc === "spec"}
+                        onClick={() => specFileRef.current?.click()}
+                        type="button"
+                      >
+                        {uploadingDoc === "spec" ? "Extrayendo..." : "Subir PDF/DOCX"}
+                      </button>
+                      <input
+                        accept=".pdf,.docx,.md,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+                        hidden
+                        onChange={(event) => {
+                          void handleUpload("spec", event.target.files?.[0]);
+                          event.target.value = "";
+                        }}
+                        ref={specFileRef}
+                        type="file"
                       />
-                    </label>
+                    </div>
+                    <textarea
+                      onChange={(event) => {
+                        setSpec(event.target.value);
+                      }}
+                      placeholder="Enunciado, requerimientos, o preview del archivo..."
+                      rows={8}
+                      value={spec}
+                    />
+                    {specPreviewId && <p className="upload-hint">Preview listo — revisá y guardá para confirmar.</p>}
                     <label>
                       <span>Resumen <em>Opcional</em></span>
                       <input
@@ -192,15 +260,34 @@ export function ProjectsPage() {
                     </button>
                   </div>
                   <div className="document-form">
-                    <label>
+                    <div className="document-toolbar">
                       <span>Approach <em>Cómo lo vas a hacer</em></span>
-                      <textarea
-                        onChange={(event) => setApproach(event.target.value)}
-                        placeholder="Stack, convenciones, scripted actions..."
-                        rows={8}
-                        value={approach}
+                      <button
+                        className="secondary-button compact-button"
+                        disabled={uploadingDoc === "approach"}
+                        onClick={() => approachFileRef.current?.click()}
+                        type="button"
+                      >
+                        {uploadingDoc === "approach" ? "Extrayendo..." : "Subir PDF/DOCX"}
+                      </button>
+                      <input
+                        accept=".pdf,.docx,.md,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+                        hidden
+                        onChange={(event) => {
+                          void handleUpload("approach", event.target.files?.[0]);
+                          event.target.value = "";
+                        }}
+                        ref={approachFileRef}
+                        type="file"
                       />
-                    </label>
+                    </div>
+                    <textarea
+                      onChange={(event) => setApproach(event.target.value)}
+                      placeholder="Stack, convenciones, scripted actions..."
+                      rows={8}
+                      value={approach}
+                    />
+                    {approachPreviewId && <p className="upload-hint">Preview listo — revisá y guardá para confirmar.</p>}
                     <label>
                       <span>Resumen <em>Opcional</em></span>
                       <input

@@ -404,7 +404,7 @@ const { value } = await mammoth.convertToMarkdown({ buffer })
 | Archivo > 10 MB | tamaño | Rechazo con mensaje |
 | Extracción vacía | idem escaneado | idem |
 
-OCR queda **fuera de v1** sin excepción.
+OCR queda **fuera de la Fase A** de implementación. El alcance completo (Tesseract local para PDF escaneado e imágenes) está documentado en `spec-ingesta.md` como **Fase B**.
 
 ### 6.4 Summaries
 

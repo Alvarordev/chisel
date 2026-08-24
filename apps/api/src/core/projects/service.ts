@@ -188,6 +188,9 @@ export function setDocument(
     content: string;
     summary?: string | null;
     source: "upload" | "paste" | "agent";
+    originalName?: string | null;
+    originalPath?: string | null;
+    id?: string;
   },
 ): { id: string; updatedAt: string } {
   const project = db
@@ -203,16 +206,18 @@ export function setDocument(
       `SELECT id FROM documents WHERE project_id = ? AND type = ?`,
     )
     .get(input.projectId, input.type);
-  const id = existing?.id ?? crypto.randomUUID();
+  const id = existing?.id ?? input.id ?? crypto.randomUUID();
   const updatedAt = nowIso();
 
   db.query(
     `
-      INSERT INTO documents (id, project_id, type, content, summary, source, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO documents (id, project_id, type, content, summary, source, original_name, original_path, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (project_id, type)
       DO UPDATE SET content = excluded.content, summary = excluded.summary,
-                    source = excluded.source, updated_at = excluded.updated_at
+                    source = excluded.source, original_name = COALESCE(excluded.original_name, documents.original_name),
+                    original_path = COALESCE(excluded.original_path, documents.original_path),
+                    updated_at = excluded.updated_at
     `,
   ).run(
     id,
@@ -221,6 +226,8 @@ export function setDocument(
     input.content,
     input.summary ?? null,
     input.source,
+    input.originalName ?? null,
+    input.originalPath ?? null,
     updatedAt,
     updatedAt,
   );

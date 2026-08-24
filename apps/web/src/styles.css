@@ -239,6 +239,11 @@ h1, h2, h3, strong { font-family: "Space Grotesk", "DM Sans", sans-serif; }
 .document-form { display: grid; gap: 12px; }
 .document-form textarea { background: rgba(251, 250, 246, .8); border: 1px solid var(--line); border-radius: 10px; color: var(--ink); font-family: inherit; font-size: 12px; line-height: 1.5; min-height: 140px; padding: 12px; resize: vertical; width: 100%; }
 .document-form textarea:focus { border-color: #a5c492; outline: none; }
+.document-toolbar { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
+.document-toolbar > span { color: var(--ink); font-size: 11px; font-weight: 600; }
+.document-toolbar em { color: var(--faint); font-style: normal; font-weight: 400; }
+.upload-hint { color: #5b7953; font-size: 11px; margin: 0; }
+.inline-warning { background: #f4ead3; border: 1px solid #e2d2a8; border-radius: 10px; color: #6d5a2c; font-size: 12px; margin-bottom: 16px; padding: 10px 12px; }
 
 .schedule-layout { display: grid; gap: 24px; grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); }
 .schedule-week-panel, .schedule-form-panel { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 24px; }
