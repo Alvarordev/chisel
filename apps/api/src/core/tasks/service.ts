@@ -105,7 +105,7 @@ export function getDay(db: Database, date: string): { date: string; tasks: Task[
       `
         SELECT id, kind, action, done_when, weight, scheduled_for, block, project_id, habit_id,
                status, blocked_by, due_time, completion_mode, completed_at
-        FROM tasks WHERE scheduled_for = ? AND habit_id IS NULL
+        FROM tasks WHERE scheduled_for = ? AND habit_id IS NULL AND status != 'dropped'
         ORDER BY block, created_at
       `,
     )
@@ -276,6 +276,22 @@ export function rescheduleTask(
   return mapTask({ ...row, scheduled_for: date, block: input.block ?? row.block }, row.kind === "batch" ? taskItems(db, row.id) : undefined);
 }
 
+function dropTaskRow(db: Database, actor: ActorContext, row: TaskRow): Task {
+  if (row.kind === "habit") throw new Error("Habits cannot be dropped");
+  if (row.status === "dropped") {
+    return mapTask(row, row.kind === "batch" ? taskItems(db, row.id) : undefined);
+  }
+
+  db.query(`UPDATE tasks SET status = 'dropped' WHERE id = ?`).run(row.id);
+  recordTaskEvent(db, actor, {
+    taskId: row.id,
+    eventType: "dropped",
+    scheduledFor: row.scheduled_for,
+    block: row.block,
+  });
+  return mapTask({ ...row, status: "dropped" }, row.kind === "batch" ? taskItems(db, row.id) : undefined);
+}
+
 export function dropTask(db: Database, actor: ActorContext, taskId: string): Task {
   const row = db
     .query<TaskRow, [string]>(
@@ -283,14 +299,53 @@ export function dropTask(db: Database, actor: ActorContext, taskId: string): Tas
     )
     .get(taskId);
   if (!row) throw new Error("Task not found");
-  if (row.kind === "habit") throw new Error("Habits cannot be dropped");
+  return dropTaskRow(db, actor, row);
+}
 
-  db.query(`UPDATE tasks SET status = 'dropped' WHERE id = ?`).run(taskId);
-  recordTaskEvent(db, actor, {
-    taskId,
-    eventType: "dropped",
-    scheduledFor: row.scheduled_for,
-    block: row.block,
-  });
-  return mapTask({ ...row, status: "dropped" }, row.kind === "batch" ? taskItems(db, row.id) : undefined);
+export function dropTasks(
+  db: Database,
+  actor: ActorContext,
+  input: { taskIds?: string[]; date?: string; pendingOnly?: boolean },
+): { dropped: Task[] } {
+  const dropped: Task[] = [];
+
+  if (input.taskIds?.length) {
+    const transaction = db.transaction(() => {
+      for (const taskId of input.taskIds!) {
+        const row = db
+          .query<TaskRow, [string]>(
+            `SELECT id, kind, action, done_when, weight, scheduled_for, block, project_id, habit_id, status, blocked_by, due_time, completion_mode, completed_at FROM tasks WHERE id = ?`,
+          )
+          .get(taskId);
+        if (!row) throw new Error(`Task not found: ${taskId}`);
+        if (input.pendingOnly && row.status !== "pending") continue;
+        dropped.push(dropTaskRow(db, actor, row));
+      }
+    });
+    transaction();
+    return { dropped };
+  }
+
+  if (input.date && input.pendingOnly) {
+    const date = parseDate(input.date);
+    const rows = db
+      .query<TaskRow, [string]>(
+        `
+          SELECT id, kind, action, done_when, weight, scheduled_for, block, project_id, habit_id,
+                 status, blocked_by, due_time, completion_mode, completed_at
+          FROM tasks
+          WHERE scheduled_for = ? AND habit_id IS NULL AND status = 'pending'
+        `,
+      )
+      .all(date);
+    const transaction = db.transaction(() => {
+      for (const row of rows) {
+        dropped.push(dropTaskRow(db, actor, row));
+      }
+    });
+    transaction();
+    return { dropped };
+  }
+
+  throw new Error("Provide taskIds or date with pendingOnly");
 }

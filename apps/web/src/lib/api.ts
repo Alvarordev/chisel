@@ -1,11 +1,16 @@
 import {
   dayResponseSchema,
   profileSchema,
+  projectDetailSchema,
   projectSchema,
+  scheduleResponseSchema,
+  type AgentStyle,
   type DayHabit,
   type DayResponse,
   type Profile,
   type Project,
+  type ProjectDetail,
+  type ScheduleResponse,
   type Task,
 } from "@chisel/contracts";
 
@@ -130,6 +135,51 @@ export async function createProject(input: {
   }));
 }
 
+export async function getProject(id: string): Promise<ProjectDetail> {
+  return projectDetailSchema.parse(await request(`/api/projects/${encodeURIComponent(id)}`));
+}
+
+export async function setProjectDocument(
+  projectId: string,
+  input: { type: "spec" | "approach"; content: string; summary?: string | null },
+): Promise<{ id: string; updatedAt: string }> {
+  return request(`/api/projects/${encodeURIComponent(projectId)}/documents`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getSchedule(): Promise<ScheduleResponse> {
+  return scheduleResponseSchema.parse(await request("/api/schedule"));
+}
+
+export type ScheduleBlockInput = {
+  id?: string;
+  label: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  state: "busy" | "free" | "porous";
+  energy?: "deep" | "shallow" | null;
+};
+
+export async function putSchedule(input: {
+  blocks: ScheduleBlockInput[];
+  validFrom: string;
+}): Promise<{ blocks: string[]; validFrom: string }> {
+  return request("/api/schedule", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function getProfile(): Promise<Profile> {
   return profileSchema.parse(await request("/api/profile"));
+}
+
+export async function updateProfile(input: { agentStyle?: AgentStyle }): Promise<Profile> {
+  return profileSchema.parse(await request("/api/profile", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }));
 }

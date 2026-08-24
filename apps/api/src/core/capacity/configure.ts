@@ -48,6 +48,59 @@ function validateRange(startTime: string, endTime: string): void {
   effectiveMinutes(startTime, endTime);
 }
 
+export type ScheduleBlock = {
+  id: string;
+  label: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  state: "busy" | "free" | "porous";
+  energy: "deep" | "shallow" | null;
+  source: "inferred" | "asked" | "learned" | "explicit";
+  validFrom: string;
+  validUntil: string | null;
+};
+
+export function listSchedule(db: Database): { validFrom: string | null; blocks: ScheduleBlock[] } {
+  const rows = db
+    .query<{
+      id: string;
+      label: string;
+      day_of_week: number;
+      start_time: string;
+      end_time: string;
+      state: "busy" | "free" | "porous";
+      energy: "deep" | "shallow" | null;
+      source: "inferred" | "asked" | "learned" | "explicit";
+      valid_from: string;
+      valid_until: string | null;
+    }, []>(
+      `
+        SELECT id, label, day_of_week, start_time, end_time, state, energy, source, valid_from, valid_until
+        FROM capacity_blocks
+        WHERE valid_until IS NULL
+        ORDER BY day_of_week ASC, start_time ASC
+      `,
+    )
+    .all();
+
+  return {
+    validFrom: rows[0]?.valid_from ?? null,
+    blocks: rows.map((row) => ({
+      id: row.id,
+      label: row.label,
+      dayOfWeek: row.day_of_week,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      state: row.state,
+      energy: row.energy,
+      source: row.source,
+      validFrom: row.valid_from,
+      validUntil: row.valid_until,
+    })),
+  };
+}
+
 export function setSchedule(
   db: Database,
   input: z.infer<typeof scheduleInputSchema>,

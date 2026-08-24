@@ -10,6 +10,7 @@ type ShellLink = {
 
 const links: ShellLink[] = [
   { to: "/app/today", label: "Hoy", icon: "calendar" },
+  { to: "/app/schedule", label: "Horario", icon: "clipboard" },
   { to: "/app/projects", label: "Proyectos", icon: "layers" },
   { to: "/app/settings", label: "Configuración", icon: "settings" },
 ];

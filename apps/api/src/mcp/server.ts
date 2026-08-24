@@ -28,11 +28,12 @@ import {
   completeTask,
   createTasks,
   dropTask,
+  dropTasks,
   getDay,
   rescheduleTask,
   taskDraftSchema,
 } from "../core/tasks/service.ts";
-import { PLANNING_CONTRACT } from "./contract.ts";
+import { buildPlanTodayPrompt, buildPlanningContract } from "./contract.ts";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
 const taskPlanSchema = z.object({
@@ -47,7 +48,10 @@ function jsonResult(data: unknown) {
   };
 }
 
-function createPlannerServer(actor: ActorContext, db: Awaited<ReturnType<typeof getUserDb>>) {
+async function createPlannerServer(actor: ActorContext, db: Awaited<ReturnType<typeof getUserDb>>) {
+  const profile = await getUserProfile(actor.userId);
+  const contract = buildPlanningContract(profile.agentStyle);
+
   const server = new McpServer({
     name: "chisel-planner",
     version: "0.1.0",
@@ -86,14 +90,14 @@ function createPlannerServer(actor: ActorContext, db: Awaited<ReturnType<typeof 
       inputSchema: z.object({ date: dateSchema }),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
-    async ({ date }) => jsonResult(resolveCapacity(db, await getUserProfile(actor.userId), date)),
+    async ({ date }) => jsonResult(resolveCapacity(db, profile, date)),
   );
 
   server.registerTool(
     "get_day",
     {
       title: "Get day",
-      description: "Read project tasks and deterministically injected habits for a date.",
+      description: "Read active project tasks (pending and done; dropped are excluded) and injected habits for a date. Always call after create_tasks to verify persistence.",
       inputSchema: z.object({ date: dateSchema }),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
@@ -108,14 +112,14 @@ function createPlannerServer(actor: ActorContext, db: Awaited<ReturnType<typeof 
       inputSchema: z.object({ date: dateSchema }),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
-    async ({ date }) => jsonResult(closeDay({ db, profile: await getUserProfile(actor.userId), date })),
+    async ({ date }) => jsonResult(closeDay({ db, profile, date })),
   );
 
   server.registerTool(
     "propose_tasks",
     {
       title: "Propose tasks",
-      description: `Validate a non-persisted plan against project context and capacity. The calling agent supplies the task decomposition; this server does not generate technical solutions.\n\n${PLANNING_CONTRACT}`,
+      description: `Validate a non-persisted plan against project context and capacity. The calling agent supplies the task decomposition; this server does not generate technical solutions.\n\n${contract}`,
       inputSchema: z.object({
         date: dateSchema,
         projectId: z.string().min(1).optional(),
@@ -125,14 +129,14 @@ function createPlannerServer(actor: ActorContext, db: Awaited<ReturnType<typeof 
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
     async ({ date, projectId, intent, tasks }) =>
-      jsonResult(proposeTasks({ db, profile: await getUserProfile(actor.userId), date, projectId, intent, tasks })),
+      jsonResult(proposeTasks({ db, profile, date, projectId, intent, tasks })),
   );
 
   server.registerTool(
     "create_tasks",
     {
       title: "Create tasks",
-      description: `Persist the supplied task plan and always return created tasks plus warnings. Never reject solely because capacity is exceeded. The calling agent supplies the task decomposition.\n\n${PLANNING_CONTRACT}`,
+      description: `Persist the supplied task plan and always return created tasks plus warnings. Never reject solely because capacity is exceeded. After calling this, you MUST call get_day(date) to verify what was persisted before telling the user.\n\n${contract}`,
       inputSchema: taskPlanSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
@@ -256,18 +260,33 @@ function createPlannerServer(actor: ActorContext, db: Awaited<ReturnType<typeof 
     "drop_task",
     {
       title: "Drop task",
-      description: "Drop a project task while preserving its append-only event history.",
+      description: "Remove a task from the active plan (soft drop). Not a failure. Use when the user changes their mind. Dropped tasks no longer appear in get_day.",
       inputSchema: z.object({ taskId: z.string().min(1) }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     async ({ taskId }) => jsonResult(dropTask(db, actor, taskId)),
   );
 
+  server.registerTool(
+    "drop_tasks",
+    {
+      title: "Drop tasks",
+      description: "Drop multiple tasks at once. Provide taskIds, or date + pendingOnly to clear all pending project tasks for that day. Use before create_tasks when replacing the plan.",
+      inputSchema: z.object({
+        taskIds: z.array(z.string().min(1)).optional(),
+        date: dateSchema.optional(),
+        pendingOnly: z.boolean().optional(),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async (input) => jsonResult(dropTasks(db, actor, input)),
+  );
+
   server.registerResource(
     "planning-contract",
     "planning-contract://current",
     { title: "Planning contract", description: "Rules the planner must follow", mimeType: "text/plain" },
-    async (uri) => ({ contents: [{ uri: uri.href, text: PLANNING_CONTRACT, mimeType: "text/plain" }] }),
+    async (uri) => ({ contents: [{ uri: uri.href, text: contract, mimeType: "text/plain" }] }),
   );
 
   server.registerPrompt(
@@ -283,7 +302,7 @@ function createPlannerServer(actor: ActorContext, db: Awaited<ReturnType<typeof 
           role: "user" as const,
           content: {
             type: "text" as const,
-            text: `Planificá ${date ?? "hoy"}. Primero leé planning-contract, list_projects, get_project_context, get_capacity y get_day. Después usá propose_tasks sin persistir hasta que el usuario confirme.`,
+            text: buildPlanTodayPrompt(profile.agentStyle, date),
           },
         },
       ],

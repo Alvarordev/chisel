@@ -4,6 +4,7 @@ import { AppShell } from "./components/AppShell";
 import { Icon } from "./components/Icon";
 import { LoginPage } from "./pages/LoginPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { SchedulePage } from "./pages/SchedulePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TodayPage } from "./pages/TodayPage";
 import { getSession, type AuthSession } from "./lib/api";
@@ -62,6 +63,7 @@ export default function App() {
       <Route element={<ProtectedRoute session={session} />}>
         <Route element={<AppShell onSignedOut={() => setSession(null)} session={session!} />}>
           <Route path="/app/today" element={<TodayPage />} />
+          <Route path="/app/schedule" element={<SchedulePage />} />
           <Route path="/app/projects" element={<ProjectsPage />} />
           <Route path="/app/settings" element={<SettingsPage />} />
         </Route>

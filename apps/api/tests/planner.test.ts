@@ -1,15 +1,16 @@
 import { expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.DATA_DIR = mkdtempSync(join("/tmp/opencode", "chisel-test-"));
+process.env.DATA_DIR = mkdtempSync(join(tmpdir(), "chisel-test-"));
 
 const { ensureUser, getUserProfile } = await import("../src/db/system.ts");
 const { getUserDb, resetUserDbPoolForTests } = await import("../src/db/user.ts");
 const { createHabit, habitsForDay } = await import("../src/core/habits/service.ts");
 const { resolveCapacity } = await import("../src/core/capacity/resolve.ts");
 const { createProject, getProjectContext } = await import("../src/core/projects/service.ts");
-const { completeTask, createTasks, getDay } = await import("../src/core/tasks/service.ts");
+const { completeTask, createTasks, dropTask, dropTasks, getDay } = await import("../src/core/tasks/service.ts");
 
 const actor = { userId: "test-user", source: "agent" as const, agentClient: "claude" as const };
 
@@ -91,6 +92,44 @@ test("capacity is expressed in minutes and preserves the completed habit mode", 
   );
 
   resetUserDbPoolForTests();
+});
+
+test("excludes dropped tasks from get_day and supports batch drop", async () => {
+  const db = await getUserDb(actor.userId);
+  const project = createProject(db, { name: "Drop test", kind: "build" });
+  const created = createTasks(db, actor, {
+    date: "2026-08-25",
+    tasks: [
+      {
+        kind: "atomic",
+        action: "Tarea A",
+        doneWhen: "Hecho A",
+        weight: "S",
+        projectId: project.id,
+      },
+      {
+        kind: "atomic",
+        action: "Tarea B",
+        doneWhen: "Hecho B",
+        weight: "S",
+        projectId: project.id,
+      },
+    ],
+  });
+
+  dropTask(db, actor, created.created[0]!.id);
+  const day = getDay(db, "2026-08-25");
+  expect(day.tasks).toHaveLength(1);
+  expect(day.tasks[0]!.action).toBe("Tarea B");
+
+  const cleared = dropTasks(db, actor, { date: "2026-08-25", pendingOnly: true });
+  expect(cleared.dropped).toHaveLength(1);
+  expect(getDay(db, "2026-08-25").tasks).toHaveLength(0);
+});
+
+test("stores agent style on user profile", async () => {
+  const profile = await getUserProfile(actor.userId);
+  expect(profile.agentStyle).toBe("direct");
 });
 
 test("challenges unauthenticated modern MCP requests", async () => {

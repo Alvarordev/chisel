@@ -13,6 +13,7 @@ export type UserProfile = {
   timezone: string;
   dayStart: string;
   dayEnd: string;
+  agentStyle: "direct" | "conversational";
 };
 
 function dataDirectory(): string {
@@ -80,8 +81,9 @@ export async function getUserProfile(userId: string): Promise<UserProfile> {
       timezone: string;
       day_start: string;
       day_end: string;
+      agent_style: "direct" | "conversational";
     }, [string]>(
-      `SELECT id, email, timezone, day_start, day_end FROM users WHERE id = ?`,
+      `SELECT id, email, timezone, day_start, day_end, agent_style FROM users WHERE id = ?`,
     )
     .get(userId);
 
@@ -95,7 +97,19 @@ export async function getUserProfile(userId: string): Promise<UserProfile> {
     timezone: row.timezone,
     dayStart: row.day_start,
     dayEnd: row.day_end,
+    agentStyle: row.agent_style,
   };
+}
+
+export async function updateUserProfile(
+  userId: string,
+  input: { agentStyle?: "direct" | "conversational" },
+): Promise<UserProfile> {
+  if (input.agentStyle) {
+    const db = await getSystemDb();
+    db.query(`UPDATE users SET agent_style = ? WHERE id = ?`).run(input.agentStyle, userId);
+  }
+  return getUserProfile(userId);
 }
 
 export function dataDir(): string {

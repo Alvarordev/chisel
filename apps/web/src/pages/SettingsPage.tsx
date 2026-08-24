@@ -1,14 +1,28 @@
 import { useEffect, useState } from "react";
-import type { Profile } from "@chisel/contracts";
-import { getProfile, signOut } from "../lib/api";
+import type { AgentStyle, Profile } from "@chisel/contracts";
+import { ApiError, getProfile, signOut, updateProfile } from "../lib/api";
 import { Icon } from "../components/Icon";
 import { useShellContext } from "../components/AppShell";
+
+const STYLE_OPTIONS: Array<{ value: AgentStyle; title: string; description: string }> = [
+  {
+    value: "direct",
+    title: "Directo",
+    description: "Pocas palabras, infiere y actúa. Ideal si querés planificar rápido.",
+  },
+  {
+    value: "conversational",
+    title: "Conversacional",
+    description: "Negocia el plan y pide confirmación antes de persistir.",
+  },
+];
 
 export function SettingsPage() {
   const { session, onSignedOut } = useShellContext();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [copied, setCopied] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [savingStyle, setSavingStyle] = useState(false);
   const mcpUrl = `${window.location.origin}/mcp`;
 
   useEffect(() => {
@@ -28,6 +42,18 @@ export function SettingsPage() {
     } finally {
       onSignedOut();
       setSigningOut(false);
+    }
+  }
+
+  async function handleStyleChange(agentStyle: AgentStyle) {
+    if (!profile || profile.agentStyle === agentStyle) return;
+    setSavingStyle(true);
+    try {
+      setProfile(await updateProfile({ agentStyle }));
+    } catch {
+      // keep previous value
+    } finally {
+      setSavingStyle(false);
     }
   }
 
@@ -60,6 +86,31 @@ export function SettingsPage() {
           <button className="secondary-button logout-button" disabled={signingOut} onClick={() => void handleSignOut()} type="button">
             <Icon name="logout" size={17} /> Cerrar sesión
           </button>
+        </section>
+
+        <section className="settings-card">
+          <p className="eyebrow">Estilo del agente</p>
+          <h2>Cómo habla contigo</h2>
+          <p className="panel-lede">Afecta el contrato MCP que leen Claude, ChatGPT y otros clientes.</p>
+          <div className="style-options" role="radiogroup" aria-label="Estilo del agente">
+            {STYLE_OPTIONS.map((option) => {
+              const selected = profile?.agentStyle === option.value;
+              return (
+                <button
+                  aria-checked={selected}
+                  className={`style-option${selected ? " is-selected" : ""}`}
+                  disabled={savingStyle || !profile}
+                  key={option.value}
+                  onClick={() => void handleStyleChange(option.value)}
+                  role="radio"
+                  type="button"
+                >
+                  <strong>{option.title}</strong>
+                  <span>{option.description}</span>
+                </button>
+              );
+            })}
+          </div>
         </section>
 
         <section className="settings-card mcp-card">
