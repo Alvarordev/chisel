@@ -255,6 +255,16 @@ h1, h2, h3, strong { font-family: "Space Grotesk", "DM Sans", sans-serif; }
 .schedule-energy { text-transform: capitalize; }
 .schedule-time-row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .schedule-form .wide-button { margin-top: 4px; }
+.schedule-note { margin-bottom: 16px; }
+.schedule-validity { color: var(--faint); font-size: 10px; }
+
+.agenda-section { margin-bottom: 28px; }
+.agenda-list { display: grid; gap: 10px; }
+.agenda-row { align-items: center; background: rgba(223, 233, 233, .45); border: 1px solid #c8d8d8; border-radius: 12px; display: grid; gap: 12px; grid-template-columns: 72px minmax(0, 1fr); padding: 12px 14px; }
+.agenda-time { color: var(--muted); display: grid; font-size: 11px; gap: 2px; }
+.agenda-copy { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.agenda-copy h3 { font-size: 13px; margin: 0; }
+.agenda-energy { background: rgba(255, 255, 255, .65); border-radius: 999px; color: var(--muted); font-size: 10px; padding: 2px 8px; text-transform: capitalize; }
 
 .login-page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(400px, .86fr); min-height: 100dvh; }
 .login-story { background: var(--navy); color: #f4f5eb; display: flex; flex-direction: column; justify-content: space-between; padding: 46px clamp(28px, 7vw, 100px); position: relative; overflow: hidden; }

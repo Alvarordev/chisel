@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ScheduleBlock } from "@chisel/contracts";
-import { ApiError, getSchedule, putSchedule, type ScheduleBlockInput } from "../lib/api";
+import { ApiError, createScheduleBlock, deleteScheduleBlock, getSchedule } from "../lib/api";
 import { Icon } from "../components/Icon";
 
 const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
-const STATE_LABELS: Record<ScheduleBlockInput["state"], string> = {
-  busy: "Ocupado",
-  free: "Libre",
-  porous: "Poroso",
-};
+type ValidityMode = "indefinite" | "until" | "duration";
+type DurationUnit = "days" | "weeks" | "months";
 
 function todayIso(): string {
   const date = new Date();
@@ -17,46 +14,61 @@ function todayIso(): string {
   return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 10);
 }
 
-type DraftBlock = ScheduleBlockInput & { key: string };
+function addDuration(from: string, amount: number, unit: DurationUnit): string {
+  const date = new Date(`${from}T12:00:00`);
+  if (unit === "days") date.setDate(date.getDate() + amount);
+  if (unit === "weeks") date.setDate(date.getDate() + amount * 7);
+  if (unit === "months") date.setMonth(date.getMonth() + amount);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
-function toDraft(block: ScheduleBlock): DraftBlock {
-  return {
-    key: block.id,
-    id: block.id,
-    label: block.label,
-    dayOfWeek: block.dayOfWeek,
-    startTime: block.startTime,
-    endTime: block.endTime,
-    state: block.state,
-    energy: block.energy,
-  };
+function formatValidity(block: ScheduleBlock): string {
+  if (!block.validUntil) return "Indefinido";
+  return `Hasta ${block.validUntil}`;
+}
+
+function computeValidUntil(
+  validFrom: string,
+  mode: ValidityMode,
+  validUntil: string,
+  durationAmount: number,
+  durationUnit: DurationUnit,
+): string | null {
+  if (mode === "indefinite") return null;
+  if (mode === "until") return validUntil || null;
+  if (durationAmount <= 0) return null;
+  return addDuration(validFrom, durationAmount, durationUnit);
 }
 
 export function SchedulePage() {
-  const [blocks, setBlocks] = useState<DraftBlock[]>([]);
-  const [validFrom, setValidFrom] = useState<string | null>(null);
+  const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [label, setLabel] = useState("");
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("10:00");
-  const [state, setState] = useState<ScheduleBlockInput["state"]>("busy");
-  const [energy, setEnergy] = useState<"deep" | "shallow" | "">("");
+  const [validFrom, setValidFrom] = useState(todayIso());
+  const [validityMode, setValidityMode] = useState<ValidityMode>("until");
+  const [validUntil, setValidUntil] = useState("");
+  const [durationAmount, setDurationAmount] = useState(16);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>("weeks");
+
+  async function loadBlocks() {
+    const schedule = await getSchedule();
+    setBlocks(schedule.blocks);
+  }
 
   useEffect(() => {
-    getSchedule()
-      .then((schedule) => {
-        setBlocks(schedule.blocks.map(toDraft));
-        setValidFrom(schedule.validFrom);
-      })
+    loadBlocks()
       .catch(() => setError("No pudimos cargar tu horario."))
       .finally(() => setLoading(false));
   }, []);
 
   const grouped = useMemo(() => {
-    const map = new Map<number, DraftBlock[]>();
+    const map = new Map<number, ScheduleBlock[]>();
     for (let day = 1; day <= 7; day += 1) map.set(day, []);
     for (const block of blocks) {
       map.set(block.dayOfWeek, [...(map.get(block.dayOfWeek) ?? []), block]);
@@ -67,44 +79,39 @@ export function SchedulePage() {
     return map;
   }, [blocks]);
 
-  function addBlock(event: FormEvent<HTMLFormElement>) {
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBlocks((current) => [
-      ...current,
-      {
-        key: crypto.randomUUID(),
+    setSaving(true);
+    setError("");
+    try {
+      await createScheduleBlock({
         label: label.trim(),
         dayOfWeek,
         startTime,
         endTime,
-        state,
-        energy: energy || null,
-      },
-    ]);
-    setLabel("");
-  }
-
-  function removeBlock(key: string) {
-    setBlocks((current) => current.filter((block) => block.key !== key));
-  }
-
-  async function saveSchedule() {
-    if (blocks.length === 0) {
-      setError("Agregá al menos un bloque antes de guardar.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const result = await putSchedule({
-        validFrom: todayIso(),
-        blocks: blocks.map(({ key: _key, ...block }) => block),
+        state: "busy",
+        validFrom,
+        validUntil: computeValidUntil(validFrom, validityMode, validUntil, durationAmount, durationUnit),
       });
-      setValidFrom(result.validFrom);
+      await loadBlocks();
+      setLabel("");
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "No pudimos guardar el horario.");
+      setError(caught instanceof ApiError ? caught.message : "No pudimos guardar el compromiso.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRemove(id: string) {
+    setRemovingId(id);
+    setError("");
+    try {
+      await deleteScheduleBlock(id);
+      await loadBlocks();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "No pudimos quitar el compromiso.");
+    } finally {
+      setRemovingId(null);
     }
   }
 
@@ -114,7 +121,7 @@ export function SchedulePage() {
         <div>
           <p className="eyebrow">Compromisos fijos</p>
           <h1>Horario</h1>
-          <p className="page-lede">Clases, trabajo y bloques que el planificador debe respetar.</p>
+          <p className="page-lede">Clases, judo y bloques a los que asistís. Son contexto para el planificador, no tareas para marcar.</p>
         </div>
         <div className="header-symbol"><Icon name="calendar" size={24} /></div>
       </header>
@@ -128,16 +135,16 @@ export function SchedulePage() {
           <section className="schedule-week-panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Plantilla vigente</p>
-                <h2>Semana actual</h2>
+                <p className="eyebrow">Solo lectura en Hoy</p>
+                <h2>Compromisos activos</h2>
               </div>
-              {validFrom && <span className="section-count">desde {validFrom}</span>}
+              <span className="section-count">{blocks.length}</span>
             </div>
 
             {blocks.length === 0 ? (
               <div className="empty-card">
-                <h3>Sin bloques todavía</h3>
-                <p>Agregá clases, trabajo u otros compromisos fijos.</p>
+                <h3>Sin compromisos todavía</h3>
+                <p>Agregá clases, judo o trabajo con su fecha de fin cuando corresponda.</p>
               </div>
             ) : (
               <div className="schedule-week">
@@ -149,17 +156,17 @@ export function SchedulePage() {
                     ) : (
                       <div className="schedule-block-list">
                         {(grouped.get(day) ?? []).map((block) => (
-                          <article className="schedule-block-card" key={block.key}>
+                          <article className="schedule-block-card" key={block.id}>
                             <div className="schedule-block-main">
                               <strong>{block.label}</strong>
                               <span>{block.startTime} – {block.endTime}</span>
-                              <span className={`schedule-state state-${block.state}`}>{STATE_LABELS[block.state]}</span>
-                              {block.energy && <span className="schedule-energy">{block.energy}</span>}
+                              <span className="schedule-validity">{formatValidity(block)}</span>
                             </div>
                             <button
-                              aria-label={`Quitar ${block.label}`}
+                              aria-label={`Finalizar ${block.label}`}
                               className="icon-button subtle"
-                              onClick={() => removeBlock(block.key)}
+                              disabled={removingId === block.id}
+                              onClick={() => void handleRemove(block.id)}
                               type="button"
                             >
                               ×
@@ -172,16 +179,13 @@ export function SchedulePage() {
                 ))}
               </div>
             )}
-
-            <button className="primary-button wide-button" disabled={saving || blocks.length === 0} onClick={() => void saveSchedule()} type="button">
-              {saving ? "Guardando..." : "Guardar plantilla"}
-            </button>
           </section>
 
           <section className="schedule-form-panel">
-            <p className="eyebrow">Nuevo bloque</p>
-            <h2>Agregar compromiso</h2>
-            <form className="project-form schedule-form" onSubmit={addBlock}>
+            <p className="eyebrow">Nuevo compromiso</p>
+            <h2>Agregar al horario</h2>
+            <p className="panel-lede schedule-note">No aparece como to-do. El agente lo usa para calcular cuánto podés avanzar.</p>
+            <form className="project-form schedule-form" onSubmit={(event) => void handleCreate(event)}>
               <label>
                 <span>Nombre</span>
                 <input onChange={(event) => setLabel(event.target.value)} placeholder="Ej. Progra Web" required value={label} />
@@ -205,24 +209,48 @@ export function SchedulePage() {
                 </label>
               </div>
               <label>
-                <span>Estado</span>
-                <select onChange={(event) => setState(event.target.value as ScheduleBlockInput["state"])} value={state}>
-                  <option value="busy">Ocupado</option>
-                  <option value="free">Libre</option>
-                  <option value="porous">Poroso</option>
-                </select>
+                <span>Empieza</span>
+                <input onChange={(event) => setValidFrom(event.target.value)} required type="date" value={validFrom} />
               </label>
               <label>
-                <span>Energía <em>Opcional</em></span>
-                <select onChange={(event) => setEnergy(event.target.value as "" | "deep" | "shallow")} value={energy}>
-                  <option value="">Sin definir</option>
-                  <option value="deep">Deep</option>
-                  <option value="shallow">Shallow</option>
+                <span>Vigencia</span>
+                <select onChange={(event) => setValidityMode(event.target.value as ValidityMode)} value={validityMode}>
+                  <option value="until">Hasta una fecha</option>
+                  <option value="duration">Por duración</option>
+                  <option value="indefinite">Indefinido</option>
                 </select>
               </label>
-              <button className="secondary-button wide-button" type="submit">
-                Agregar bloque
-                <Icon name="plus" size={17} />
+              {validityMode === "until" && (
+                <label>
+                  <span>Hasta</span>
+                  <input onChange={(event) => setValidUntil(event.target.value)} required type="date" value={validUntil} />
+                </label>
+              )}
+              {validityMode === "duration" && (
+                <div className="schedule-time-row">
+                  <label>
+                    <span>Cantidad</span>
+                    <input
+                      min={1}
+                      onChange={(event) => setDurationAmount(Number(event.target.value))}
+                      required
+                      type="number"
+                      value={durationAmount}
+                    />
+                  </label>
+                  <label>
+                    <span>Unidad</span>
+                    <select onChange={(event) => setDurationUnit(event.target.value as DurationUnit)} value={durationUnit}>
+                      <option value="days">Días</option>
+                      <option value="weeks">Semanas</option>
+                      <option value="months">Meses</option>
+                    </select>
+                  </label>
+                </div>
+              )}
+              <button className="primary-button wide-button" disabled={saving} type="submit">
+                {saving ? "Guardando..." : "Guardar compromiso"}
+                {!saving && <Icon name="plus" size={17} />}
               </button>
             </form>
           </section>

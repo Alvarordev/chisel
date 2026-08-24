@@ -1,6 +1,8 @@
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
 import type { ActorContext } from "../context.ts";
+import type { UserProfile } from "../../db/system.ts";
+import { resolveCapacity } from "../capacity/resolve.ts";
 import { completeHabit, habitsForDay } from "../habits/service.ts";
 import {
   minutesForWeight,
@@ -98,7 +100,24 @@ function taskItems(db: Database, taskId: string): NonNullable<Task["items"]> {
     }));
 }
 
-export function getDay(db: Database, date: string): { date: string; tasks: Task[]; habits: ReturnType<typeof habitsForDay> } {
+export type AgendaItem = {
+  id: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  energy: "deep" | "shallow" | null;
+};
+
+export function getDay(
+  db: Database,
+  date: string,
+  profile?: UserProfile,
+): {
+  date: string;
+  tasks: Task[];
+  habits: ReturnType<typeof habitsForDay>;
+  agenda: AgendaItem[];
+} {
   parseDate(date);
   const rows = db
     .query<TaskRow, [string]>(
@@ -112,7 +131,20 @@ export function getDay(db: Database, date: string): { date: string; tasks: Task[
     .all(date);
   const tasks = rows.map((row) => mapTask(row, row.kind === "batch" ? taskItems(db, row.id) : undefined));
 
-  return { date, tasks, habits: habitsForDay(db, date) };
+  const agenda = profile
+    ? resolveCapacity(db, profile, date)
+        .blocks.filter((block) => block.state === "busy" && !block.id.startsWith("inferred:"))
+        .map((block) => ({
+          id: block.id,
+          label: block.label,
+          startTime: block.startTime,
+          endTime: block.endTime,
+          energy: block.energy,
+        }))
+        .sort((a, b) => a.startTime.localeCompare(b.startTime))
+    : [];
+
+  return { date, tasks, habits: habitsForDay(db, date), agenda };
 }
 
 export function createTasks(

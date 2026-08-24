@@ -15,6 +15,8 @@ Agrupá en batch si tres o más tareas comparten verbo y estructura. Ordená por
 
 Emparejamiento con energía es preferencia, no restricción: deep para diseño/código complejo, shallow para mecánico, porous para batches S. Avisá si hay mismatch y creá igual.
 
+Los compromisos busy del horario (get_capacity / agenda en get_day) son contexto de ocupación, no tareas. Nunca crees tareas que dupliquen un bloque busy ("asistir a clase X", "ir a judo").
+
 Los hábitos ya vienen inyectados y ocupan capacidad. No los propongas ni los muevas.
 
 El backend usa minutos: S=15, M=45, L=120. Los puntos (1, 2, 4) resumen progreso; nunca son límite ni meta.

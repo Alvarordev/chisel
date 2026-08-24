@@ -205,6 +205,37 @@ export function TodayPage() {
         </div>
       ) : (
         <>
+          <section className="day-section agenda-section">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Contexto del día</p>
+                <h2>Agenda</h2>
+              </div>
+              <span className="section-count">{day?.agenda.length ?? 0} compromisos</span>
+            </div>
+            {day?.agenda.length ? (
+              <div className="agenda-list">
+                {day.agenda.map((item) => (
+                  <article className="agenda-row" key={item.id}>
+                    <div className="agenda-time">
+                      <span>{item.startTime}</span>
+                      <span>{item.endTime}</span>
+                    </div>
+                    <div className="agenda-copy">
+                      <h3>{item.label}</h3>
+                      {item.energy && <span className="agenda-energy">{item.energy}</span>}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-card compact-empty">
+                <h3>Sin compromisos fijos</h3>
+                <p>Los bloques de tu horario aparecen aquí como contexto, no como tareas.</p>
+              </div>
+            )}
+          </section>
+
           <section className="day-section">
             <div className="section-heading">
               <div>

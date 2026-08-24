@@ -49,8 +49,17 @@ export const dayHabitSchema = z.object({
   estimatedMinutes: z.number(),
 });
 
+export const agendaItemSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
+  energy: z.enum(["deep", "shallow"]).nullable(),
+});
+
 export const dayResponseSchema = z.object({
   date: z.string(),
+  agenda: z.array(agendaItemSchema),
   tasks: z.array(taskSchema),
   habits: z.array(dayHabitSchema),
 });
@@ -99,7 +108,7 @@ export const scheduleBlockSchema = z.object({
 });
 
 export const scheduleResponseSchema = z.object({
-  validFrom: z.string().nullable(),
+  asOf: z.string(),
   blocks: z.array(scheduleBlockSchema),
 });
 
@@ -114,6 +123,7 @@ export const profileSchema = z.object({
 
 export type Task = z.infer<typeof taskSchema>;
 export type DayHabit = z.infer<typeof dayHabitSchema>;
+export type AgendaItem = z.infer<typeof agendaItemSchema>;
 export type DayResponse = z.infer<typeof dayResponseSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type ProjectDocument = z.infer<typeof projectDocumentSchema>;

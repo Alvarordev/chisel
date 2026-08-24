@@ -127,6 +127,38 @@ test("excludes dropped tasks from get_day and supports batch drop", async () => 
   expect(getDay(db, "2026-08-25").tasks).toHaveLength(0);
 });
 
+test("schedule blocks respect validUntil and appear in day agenda", async () => {
+  const { createScheduleBlock, listSchedule } = await import("../src/core/capacity/configure.ts");
+  const db = await getUserDb(actor.userId);
+  const profile = await getUserProfile(actor.userId);
+
+  createScheduleBlock(db, {
+    label: "Progra Web",
+    dayOfWeek: 1,
+    startTime: "08:00",
+    endTime: "10:00",
+    state: "busy",
+    validFrom: "2026-08-01",
+    validUntil: "2026-12-15",
+  });
+  createScheduleBlock(db, {
+    label: "Judo",
+    dayOfWeek: 1,
+    startTime: "13:00",
+    endTime: "15:00",
+    state: "busy",
+    validFrom: "2026-08-01",
+    validUntil: "2026-09-01",
+  });
+
+  expect(listSchedule(db, "2026-08-24").blocks).toHaveLength(2);
+  expect(listSchedule(db, "2026-10-01").blocks).toHaveLength(1);
+
+  const day = getDay(db, "2026-08-24", profile);
+  expect(day.agenda.map((item) => item.label)).toEqual(["Progra Web", "Judo"]);
+  expect(day.agenda[0]).toMatchObject({ startTime: "08:00", endTime: "10:00" });
+});
+
 test("stores agent style on user profile", async () => {
   const profile = await getUserProfile(actor.userId);
   expect(profile.agentStyle).toBe("direct");

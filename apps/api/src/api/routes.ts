@@ -10,7 +10,14 @@ import {
   projectKindSchema,
   setDocument,
 } from "../core/projects/service.ts";
-import { listSchedule, scheduleInputSchema, setSchedule } from "../core/capacity/configure.ts";
+import {
+  closeScheduleBlock,
+  createScheduleBlock,
+  listSchedule,
+  scheduleBlockUpdateSchema,
+  scheduleBlockWriteSchema,
+  updateScheduleBlock,
+} from "../core/capacity/configure.ts";
 import { actorFromSession } from "../auth/actors.ts";
 
 export const apiRoutes = new Hono();
@@ -20,7 +27,8 @@ apiRoutes.get("/day/:date", async (c) => {
   if (!actor) return c.json({ error: "Unauthorized" }, 401);
   await ensureUser({ id: actor.userId });
   const db = await getUserDb(actor.userId);
-  return c.json(getDay(db, c.req.param("date")));
+  const profile = await getUserProfile(actor.userId);
+  return c.json(getDay(db, c.req.param("date"), profile));
 });
 
 apiRoutes.post("/tasks/:id/complete", async (c) => {
@@ -105,17 +113,44 @@ apiRoutes.get("/schedule", async (c) => {
   if (!actor) return c.json({ error: "Unauthorized" }, 401);
   await ensureUser({ id: actor.userId });
   const db = await getUserDb(actor.userId);
-  return c.json(listSchedule(db));
+  const asOf = c.req.query("asOf");
+  return c.json(listSchedule(db, asOf && /^\d{4}-\d{2}-\d{2}$/.test(asOf) ? asOf : undefined));
 });
 
-apiRoutes.put("/schedule", async (c) => {
+apiRoutes.post("/schedule/blocks", async (c) => {
   const actor = await actorFromSession(c.req.raw, "web");
   if (!actor) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json();
-  const parsed = scheduleInputSchema.parse(body);
+  const parsed = scheduleBlockWriteSchema.parse(body);
   await ensureUser({ id: actor.userId });
   const db = await getUserDb(actor.userId);
-  return c.json(setSchedule(db, parsed));
+  return c.json(createScheduleBlock(db, parsed), 201);
+});
+
+apiRoutes.patch("/schedule/blocks/:id", async (c) => {
+  const actor = await actorFromSession(c.req.raw, "web");
+  if (!actor) return c.json({ error: "Unauthorized" }, 401);
+  const body = await c.req.json();
+  const parsed = scheduleBlockUpdateSchema.parse(body);
+  await ensureUser({ id: actor.userId });
+  const db = await getUserDb(actor.userId);
+  try {
+    return c.json(updateScheduleBlock(db, c.req.param("id"), parsed));
+  } catch {
+    return c.json({ error: "Capacity block not found" }, 404);
+  }
+});
+
+apiRoutes.delete("/schedule/blocks/:id", async (c) => {
+  const actor = await actorFromSession(c.req.raw, "web");
+  if (!actor) return c.json({ error: "Unauthorized" }, 401);
+  await ensureUser({ id: actor.userId });
+  const db = await getUserDb(actor.userId);
+  try {
+    return c.json(closeScheduleBlock(db, c.req.param("id")));
+  } catch {
+    return c.json({ error: "Capacity block not found" }, 404);
+  }
 });
 
 apiRoutes.get("/profile", async (c) => {

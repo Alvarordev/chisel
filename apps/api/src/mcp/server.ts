@@ -97,11 +97,11 @@ async function createPlannerServer(actor: ActorContext, db: Awaited<ReturnType<t
     "get_day",
     {
       title: "Get day",
-      description: "Read active project tasks (pending and done; dropped are excluded) and injected habits for a date. Always call after create_tasks to verify persistence.",
+      description: "Read active project tasks (pending and done; dropped are excluded), injected habits, and read-only busy agenda commitments for a date. Agenda items are not tasks. Always call after create_tasks to verify persistence.",
       inputSchema: z.object({ date: dateSchema }),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
-    async ({ date }) => jsonResult(getDay(db, date)),
+    async ({ date }) => jsonResult(getDay(db, date, profile)),
   );
 
   server.registerTool(
@@ -190,7 +190,7 @@ async function createPlannerServer(actor: ActorContext, db: Awaited<ReturnType<t
     "set_schedule",
     {
       title: "Set weekly schedule",
-      description: "Create a new effective-dated weekly capacity template without deleting historical blocks.",
+      description: "Create a new effective-dated weekly capacity block without closing other commitments. Each block may include validFrom and validUntil.",
       inputSchema: scheduleInputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },

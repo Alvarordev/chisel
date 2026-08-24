@@ -10,6 +10,7 @@ import {
   type Profile,
   type Project,
   type ProjectDetail,
+  type ScheduleBlock,
   type ScheduleResponse,
   type Task,
 } from "@chisel/contracts";
@@ -149,27 +150,42 @@ export async function setProjectDocument(
   });
 }
 
-export async function getSchedule(): Promise<ScheduleResponse> {
-  return scheduleResponseSchema.parse(await request("/api/schedule"));
+export async function getSchedule(asOf?: string): Promise<ScheduleResponse> {
+  const query = asOf ? `?asOf=${encodeURIComponent(asOf)}` : "";
+  return scheduleResponseSchema.parse(await request(`/api/schedule${query}`));
 }
 
 export type ScheduleBlockInput = {
-  id?: string;
   label: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
   state: "busy" | "free" | "porous";
   energy?: "deep" | "shallow" | null;
+  validFrom?: string;
+  validUntil?: string | null;
 };
 
-export async function putSchedule(input: {
-  blocks: ScheduleBlockInput[];
-  validFrom: string;
-}): Promise<{ blocks: string[]; validFrom: string }> {
-  return request("/api/schedule", {
-    method: "PUT",
+export async function createScheduleBlock(input: ScheduleBlockInput): Promise<ScheduleBlock> {
+  return request("/api/schedule/blocks", {
+    method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+export async function updateScheduleBlock(
+  id: string,
+  input: Partial<ScheduleBlockInput>,
+): Promise<ScheduleBlock> {
+  return request(`/api/schedule/blocks/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteScheduleBlock(id: string): Promise<ScheduleBlock> {
+  return request(`/api/schedule/blocks/${encodeURIComponent(id)}`, {
+    method: "DELETE",
   });
 }
 
